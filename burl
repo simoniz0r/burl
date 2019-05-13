@@ -27,6 +27,10 @@ burl.argparse() {
         case "$arg" in
             # skip the dash
             -) sleep 0;;
+            # use openssl
+            O) export BURL_USE_OPENSSL="TRUE";;
+            # use bash /dev/tcp
+            B) export BURL_USE_BASH="TRUE";;
             # quiet mode
             q|s) export BURL_QUIET="TRUE";;
             # request method
@@ -41,12 +45,19 @@ burl.argparse() {
 # function to output help
 burl.help() {
 printf "%s\n" "burl 0.0.1
-A simple script that makes 'openssl' and bash's '/dev/tcp' easier to use
+A simple script that makes 'openssl' and bash's '/dev/tcp' easier to use.
+The default method is to try a HEAD request with openssl.  If the HEAD 
+request failed, bash's '/dev/tcp' is used.  Otherwise, the request is repeated
+with openssl.
 
 Usage:
     burl [options] <url>
     
 Options:
+    -O          Use openssl instead of default method
+
+    -B          Use bash's /dev/tcp instead of default method
+
     -q, -s      Enable quiet mode
     
     -X, -m      Specify the request command to use (Ex: HEAD, GET, POST)
@@ -107,12 +118,14 @@ if [[ -z "$BURL_URL" ]]; then
 elif [[ "$BURL_QUIET" == "TRUE" ]]; then
     # get host domain from full URL
     BURL_HOST="$(echo $BURL_URL | cut -f3 -d'/')"
-    # try with openssl first and fallback to bash
-    BURL_METHOD_SAVED="$BURL_METHOD"
-    BURL_METHOD="HEAD"
-    BURL_OUT="$(req.openssl)"
-    BURL_METHOD="$BURL_METHOD_SAVED"
-    if [[ ! "$BURL_OUT" == "" ]]; then
+    if [[ "$BURL_USE_BASH" != "TRUE" && "$BURL_USE_OPENSSL" != "TRUE" ]]; then
+        # try with openssl first and fallback to bash
+        BURL_METHOD_SAVED="$BURL_METHOD"
+        BURL_METHOD="HEAD"
+        BURL_OUT="$(req.openssl)"
+        BURL_METHOD="$BURL_METHOD_SAVED"
+    fi
+    if [[ "$BURL_USE_OPENSSL" == "TRUE" || "$BURL_OUT" != "" ]]; then
         req.openssl | awk '/^\r$/,0' | tail -n +2
     else
         req.bash | awk '/^\r$/,0' | tail -n +2
@@ -120,12 +133,14 @@ elif [[ "$BURL_QUIET" == "TRUE" ]]; then
 else
     # get host domain from full URL
     BURL_HOST="$(echo $BURL_URL | cut -f3 -d'/')"
-    # try with openssl first and fallback to bash
-    BURL_METHOD_SAVED="$BURL_METHOD"
-    BURL_METHOD="HEAD"
-    BURL_OUT="$(req.openssl)"
-    BURL_METHOD="$BURL_METHOD_SAVED"
-    if [[ ! "$BURL_OUT" == "" ]]; then
+    if [[ "$BURL_USE_BASH" != "TRUE" && "$BURL_USE_OPENSSL" != "TRUE" ]]; then
+        # try with openssl first and fallback to bash
+        BURL_METHOD_SAVED="$BURL_METHOD"
+        BURL_METHOD="HEAD"
+        BURL_OUT="$(req.openssl)"
+        BURL_METHOD="$BURL_METHOD_SAVED"
+    fi
+    if [[ "$BURL_USE_OPENSSL" == "TRUE" || "$BURL_OUT" != "" ]]; then
         req.openssl
     else
         req.bash
