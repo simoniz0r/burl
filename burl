@@ -21,7 +21,7 @@ req.bash() {
 # function to detect shortopts
 burl.argparse() {
     # unset used variables to avoid double setting each time ran
-    unset BURL_QUIET BURL_METHOD_SET BURL_HEADERS_SET
+    unset BURL_METHOD_SET BURL_HEADERS_SET
     # run for loop on each character of input using 'grep -o .'
     for arg in $(echo "$1" | grep -o .); do
         case "$arg" in
