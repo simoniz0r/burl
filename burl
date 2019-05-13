@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 # Title: burl
 # Author: simonizor
 # License: MIT
@@ -7,13 +7,13 @@
 
 # function to handle all except POST requests with openssl
 req.openssl() {
-    BURL_HEADERS="$(echo ${BURL_HEADERS[@]} | sed 's%: %:#%g;s% %\r\n%g;s%:#%: %g')"
+    BURL_HEADERS="$(printf "%s\n" "${BURL_HEADERS[@]}" | awk '{gsub(/\n/,"\r\n")}1')"
     echo -ne "$BURL_METHOD $BURL_URL HTTP/1.0\r\nHost: $BURL_HOST\r\n$BURL_HEADERS\r\n\r\n" | \
     openssl s_client -connect "$BURL_HOST":443 -quiet 2> /dev/null
 }
 # function to handle all except POST requests with bash
 req.bash() {
-    BURL_HEADERS="$(echo ${BURL_HEADERS[@]} | sed 's%: %:#%g;s% %\r\n%g;s%:#%: %g')"
+    BURL_HEADERS="$(printf "%s\n" "${BURL_HEADERS[@]}" | awk '{gsub(/\n/,"\r\n")}1')"
     exec 9<> /dev/tcp/"$BURL_HOST"/80
     echo -ne "$BURL_METHOD $BURL_URL HTTP/1.0\r\nHost: $BURL_HOST\r\n$BURL_HEADERS\r\n\r\n" >& 9
     cat <& 9
