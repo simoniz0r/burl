@@ -26,7 +26,7 @@ burl.argparse() {
     for arg in $(echo "$1" | grep -o .); do
         case "$arg" in
             # skip the dash
-            -) sleep 0;;
+            -) continue;;
             # use openssl
             O) export BURL_USE_OPENSSL="TRUE";;
             # use bash /dev/tcp
