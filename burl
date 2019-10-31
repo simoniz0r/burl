@@ -5,7 +5,7 @@
 # Dependencies: openssl
 # Description: A simple script that makes 'openssl' and bash's '/dev/tcp' easier to use
 
-USE_BASH=0 QUIET=0 METHOD='' HEADER=() INVALID_ARG=()
+USE_BASH=0 QUIET=0 METHOD='' HEADERS=() INVALID_ARG=()
 
 # function to handle all except POST requests with openssl
 req_openssl() {
