@@ -65,14 +65,15 @@ while (($#)); do
                     H)
                         # if there is more in arg after opt make that optarg
                         if [[ -n "${1:i+1}" ]]; then
-                            HEADERS+=("${1:i+1}") HEADERS[-1]="${HEADERS[-1]^^}"
+                            HEADERS+=("${1:i+1}")
                         # otherwise make next argument optarg
                         else
-                            HEADERS+=("${2^^}")
+                            HEADERS+=("$2")
                             shift
                         fi
                         break
                         ;;
+                    *) INVALID_ARG+=("-$1");;
                 esac
             done
             ;;
