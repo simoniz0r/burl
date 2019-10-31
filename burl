@@ -5,148 +5,126 @@
 # Dependencies: openssl
 # Description: A simple script that makes 'openssl' and bash's '/dev/tcp' easier to use
 
+USE_BASH=0 QUIET=0 METHOD='' HEADER=() INVALID_ARG=()
+
 # function to handle all except POST requests with openssl
-req.openssl() {
-    BURL_HEADERS="$(printf "%s\n" "${BURL_HEADERS[@]}" | awk '{gsub(/\n/,"\r\n")}1')"
-    echo -ne "$BURL_METHOD $BURL_URL HTTP/1.0\r\nHost: $BURL_HOST\r\n$BURL_HEADERS\r\n\r\n" | \
-    openssl s_client -connect "$BURL_HOST":443 -quiet 2> /dev/null
+req_openssl() {
+    HEADERS="$(printf '%s\n' "${HEADERS[@]}")"
+    printf '%s %s HTTP/1.0\nHost: %s\n%s\n\n' "$METHOD" "$URL" "$HOST" "$HEADERS" |
+        openssl s_client -crlf -connect "$HOST":443 -quiet 2>/dev/null
 }
+
 # function to handle all except POST requests with bash
-req.bash() {
-    BURL_HEADERS="$(printf "%s\n" "${BURL_HEADERS[@]}" | awk '{gsub(/\n/,"\r\n")}1')"
-    exec 9<> /dev/tcp/"$BURL_HOST"/80
-    echo -ne "$BURL_METHOD $BURL_URL HTTP/1.0\r\nHost: $BURL_HOST\r\n$BURL_HEADERS\r\n\r\n" >& 9
-    cat <& 9
+req_bash() {
+    HEADERS="$(printf '%s\r\n' "${HEADERS[@]}")"
+    exec 9<> /dev/tcp/"$HOST"/80
+    printf '%s %s HTTP/1.0\r\nHost: %s\r\n%s\n\r\n' "$METHOD" "$URL" "$HOST" "$HEADERS" >&9
+    cat <&9
 }
-# function to detect shortopts
-burl.argparse() {
-    # unset used variables to avoid double setting each time ran
-    unset BURL_METHOD_SET BURL_HEADERS_SET
-    # run for loop on each character of input using 'grep -o .'
-    for arg in $(echo "$1" | grep -o .); do
-        case "$arg" in
-            # skip the dash
-            -) continue;;
-            # use openssl
-            O) export BURL_USE_OPENSSL="TRUE";;
-            # use bash /dev/tcp
-            B) export BURL_USE_BASH="TRUE";;
-            # quiet mode
-            q|s) export BURL_QUIET="TRUE";;
-            # request method
-            X|m) export BURL_METHOD_SET="TRUE";;
-            # set headers
-            H) export BURL_HEADERS_SET="TRUE";;
-            # add anything else to invalid arguments array
-            *) export BURL_INVALID_ARG+=("$arg");;
-        esac
-    done
-}
+
 # function to output help
-burl.help() {
-printf "%s\n" "burl 0.0.1
-A simple script that makes 'openssl' and bash's '/dev/tcp' easier to use.
-The default method is to try a HEAD request with openssl.  If the HEAD 
-request failed, bash's '/dev/tcp' is used.  Otherwise, the request is repeated
-with openssl.
-
-Usage:
-    burl [options] <url>
-    
-Options:
-    -O          Use openssl instead of default method
-
-    -B          Use bash's /dev/tcp instead of default method
-
-    -q, -s      Enable quiet mode
-    
-    -X, -m      Specify the request command to use (Ex: HEAD, GET, POST)
-    
-    -H          Pass custom header(s) to the server (may be used more than once)
-"
+usage() {
+    printf 'burl 0.0.1\n'
+    printf "A simple script that makes 'openssl' and bash's '/dev/tcp' easier to use.\n"
+    printf 'The default method is openssl\n'
+    printf 'Usage:\n'
+    printf 'burl [options] <url>\n\n'
+    printf 'Options:\n'
+    printf "\t-B    \t\tUse bash's /dev/tcp instead of openssl\n\n"
+    printf '\t-q, -s\t\tEnable quiet mode\n\n'
+    printf '\t-X, -m\t\tSpecify the request command to use (Ex: HEAD, GET, POST)\n\n'
+    printf '\t-H    \t\tPass custom header(s) to the server (may be used more than once)\n\n'
 }
+
 # detect arguments
-while [[ $# -gt 0 ]]; do
+while (($#)); do
     case "$1" in
         # output help and break
-        --help|-h) burl.help; exit 0;;
-        # parse shortopts using burl.argparse function
+        --help|-h) usage; exit 0;;
+        # parse shortopts using burl_argparse function
         -[a-zA-Z]*)
-            burl.argparse "$1"
-            shift
-            # if X or m passed, set BURL_METHOD to upper case of following input
-            if [[ "$BURL_METHOD_SET" == "TRUE" ]]; then
-                BURL_METHOD="$(echo $1 | tr '[:lower:]' '[:upper:]')"
-                shift
-            fi
-            # if H passed, add following input to BURL_HEADERS array
-            if [[ "$BURL_HEADERS_SET" == "TRUE" ]]; then
-                BURL_HEADERS+=("$1")
-                shift
-            fi
+            for ((i = 1; i < ${#1}; i++)); do
+                case "${1:i:1}" in
+                    # use bash /dev/tcp
+                    B) USE_BASH=1;;
+                    # quiet mode
+                    q|s) QUIET=1;;
+                    # request method, set METHOD to uppercase of argument
+                    X|m)
+                        # if there is more in arg after opt make that optarg
+                        if [[ -n "${1:i+1}" ]]; then
+                            METHOD="${1:i+1}" METHOD="${METHOD^^}"
+                        # otherwise make next argument optarg
+                        else
+                            METHOD="${2^^}"
+                            shift
+                        fi
+                        break
+                        ;;
+                    # set headers, add following input to HEADERS array
+                    H)
+                        # if there is more in arg after opt make that optarg
+                        if [[ -n "${1:i+1}" ]]; then
+                            HEADERS+=("${1:i+1}") HEADERS[-1]="${HEADERS[-1]^^}"
+                        # otherwise make next argument optarg
+                        else
+                            HEADERS+=("${2^^}")
+                            shift
+                        fi
+                        break
+                        ;;
+                esac
+            done
             ;;
         # no longopts yet so add to invalid args array
-        --*) BURL_INVALID_ARG+=("$1"); shift;;
+        --*) INVALID_ARG+=("$1");;
         # assume any other input is the url to be used
-        *) BURL_URL="$1"; shift;;
+        *) URL="$1";;
     esac
+    shift
 done
+
 # if invalid arguments passed, show them and exit
-if [[ "$BURL_INVALID_ARG" != "" ]]; then
-    echo "Invalid argument(s) passed: $(printf '%s,' "${BURL_INVALID_ARG[@]}" | rev | cut -f2- -d',' | rev)"
-    echo "See '--help' for usage."
+if [[ -n "${INVALID_ARG[*]}" ]]; then
+    IFS=',' # make INVALID_ARG expand comma delimited
+    echo "Invalid argument(s) passed: ${INVALID_ARG[*]}" >&2
+    echo "See '--help' for usage." >&2
     exit 1
 fi
+
 # set curl user agent if user agent not set
-if ! echo "${BURL_HEADERS[@]}" | grep -q 'User-Agent:'; then
-    BURL_HEADERS+=("User-Agent: curl/7.64.0")
+if [[ "${HEADERS[*]}" != *'User-Agent:'* ]]; then
+    HEADERS+=("User-Agent: curl/7.64.0")
 fi
-# if BURL_METHOD is HEAD, disable quiet mode
-if [[ "$BURL_METHOD" == "HEAD" ]]; then
-    BURL_QUIET="FALSE"
+
+# if METHOD is HEAD, disable quiet mode, and if it isn't set, use GET
+if [[ "${METHOD:=GET}" = 'HEAD' ]]; then
+    QUIET=0
 fi
-# if BURL_METHOD not set, use GET
-if [[ -z "$BURL_METHOD" ]]; then
-    BURL_METHOD="GET"
-fi
-# unset BURL_OUT in case set externally
-unset BURL_OUT
+
 # if missing url, output help
-if [[ -z "$BURL_URL" ]]; then
-    echo "Missing url.  See '--help' for usage."
-# if BURL_QUIET is TRUE, get rid of header info using awk and tail
-elif [[ "$BURL_QUIET" == "TRUE" ]]; then
-    # get host domain from full URL
-    BURL_HOST="$(echo $BURL_URL | cut -f3 -d'/')"
-    if [[ "$BURL_USE_BASH" != "TRUE" && "$BURL_USE_OPENSSL" != "TRUE" ]]; then
-        # try with openssl first and fallback to bash
-        BURL_METHOD_SAVED="$BURL_METHOD"
-        BURL_METHOD="HEAD"
-        BURL_OUT="$(req.openssl)"
-        BURL_METHOD="$BURL_METHOD_SAVED"
-    fi
-    if [[ "$BURL_USE_OPENSSL" == "TRUE" || "$BURL_OUT" != "" ]]; then
-        req.openssl | awk '/^\r$/,0' | tail -n +2
-    else
-        req.bash | awk '/^\r$/,0' | tail -n +2
-    fi
+if [[ -z "$URL" ]]; then
+    echo "Missing url.  See '--help' for usage." >&2
+    exit 1
+fi
+
+# get host domain from full URL
+HOST="${URL#*/*/}" HOST="${HOST%%/*}"
+if ((USE_BASH)); then
+    REQ='req_bash'
 else
-    # get host domain from full URL
-    BURL_HOST="$(echo $BURL_URL | cut -f3 -d'/')"
-    if [[ "$BURL_USE_BASH" != "TRUE" && "$BURL_USE_OPENSSL" != "TRUE" ]]; then
-        # try with openssl first and fallback to bash
-        BURL_METHOD_SAVED="$BURL_METHOD"
-        BURL_METHOD="HEAD"
-        BURL_OUT="$(req.openssl)"
-        BURL_METHOD="$BURL_METHOD_SAVED"
-    fi
-    if [[ "$BURL_USE_OPENSSL" == "TRUE" || "$BURL_OUT" != "" ]]; then
-        req.openssl
-    else
-        req.bash
-    fi
-    # echo to ensure newline at end if BURL_METHOD is GET
-    if [[ "$BURL_METHOD" == "GET" ]]; then
-        echo
-    fi
+    REQ='req_openssl'
+fi
+
+# if QUIET is 1, get rid of header info
+if ((QUIET)); then
+    mapfile OUTPUT < <("${REQ}")
+    for i in "${!OUTPUT[@]}"; do
+        # print everything after the first line with only CRLF
+        [[ "${OUTPUT[i]}" = $'\r\n' ]] && break
+        unset 'OUTPUT[i]'
+    done
+    printf '%s' "${OUTPUT[@]:i+1}"
+else
+    "${REQ}"
 fi
