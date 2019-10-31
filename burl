@@ -9,16 +9,16 @@ USE_BASH=0 QUIET=0 METHOD='' HEADER=() INVALID_ARG=()
 
 # function to handle all except POST requests with openssl
 req_openssl() {
-    HEADERS="$(printf '%s\n' "${HEADERS[@]}")"
-    printf '%s %s HTTP/1.0\nHost: %s\n%s\n\n' "$METHOD" "$URL" "$HOST" "$HEADERS" |
+    printf -v HEADERS '%s\n' "${HEADERS[@]}"
+    printf '%s %s HTTP/1.0\nHost: %s\n%s\n' "$METHOD" "$URL" "$HOST" "$HEADERS" |
         openssl s_client -crlf -connect "$HOST":443 -quiet 2>/dev/null
 }
 
 # function to handle all except POST requests with bash
 req_bash() {
-    HEADERS="$(printf '%s\r\n' "${HEADERS[@]}")"
+    printf -v HEADERS '%s\r\n' "${HEADERS[@]}"
     exec 9<> /dev/tcp/"$HOST"/80
-    printf '%s %s HTTP/1.0\r\nHost: %s\r\n%s\n\r\n' "$METHOD" "$URL" "$HOST" "$HEADERS" >&9
+    printf '%s %s HTTP/1.0\r\nHost: %s\r\n%s\r\n' "$METHOD" "$URL" "$HOST" "$HEADERS" >&9
     cat <&9
 }
 
